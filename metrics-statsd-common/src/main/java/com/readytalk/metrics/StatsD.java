@@ -86,14 +86,25 @@ public class StatsD implements Closeable {
   }
 
   /**
-   * Sends the given measurement to the server. Logs exceptions.
+   * Sends the given measurement to the server as a gauge. Logs exceptions.
    *
    * @param name  the name of the metric
    * @param value the value of the metric
    */
   public void send(final String name, final String value) {
+    send(name, value, MetricType.GAUGE);
+  }
+
+  /**
+   * Sends the given measurement to the server. Logs exceptions.
+   *
+   * @param name  the name of the metric
+   * @param value the value of the metric
+   * @param type  the type of the metric
+   */
+  public void send(final String name, final String value, final MetricType type) {
     try {
-      String formatted = String.format("%s:%s|g", sanitize(name), sanitize(value));
+      String formatted = String.format("%s:%s|%s", sanitize(name), sanitize(value), type.getCode());
       byte[] bytes = formatted.getBytes(UTF_8);
       socket.send(socketFactory.createPacket(bytes, bytes.length, address));
       failures = 0;

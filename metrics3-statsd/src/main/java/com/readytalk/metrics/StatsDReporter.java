@@ -33,6 +33,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
@@ -49,6 +50,7 @@ public class StatsDReporter extends ScheduledReporter {
 
   private final StatsD statsD;
   private final String prefix;
+  private final Map<String, Long> flushedCounters;
 
   private StatsDReporter(final MetricRegistry registry,
                          final StatsD statsD,
@@ -59,6 +61,7 @@ public class StatsDReporter extends ScheduledReporter {
     super(registry, "statsd-reporter", filter, rateUnit, durationUnit);
     this.statsD = statsD;
     this.prefix = prefix;
+    this.flushedCounters = new HashMap<String, Long>();
   }
 
   /**
@@ -242,14 +245,23 @@ public class StatsDReporter extends ScheduledReporter {
   }
 
   private void reportCounter(final String name, final Counter counter) {
-    statsD.send(prefix(name), formatNumber(counter.getCount()));
+    // StatsD expects the counter to be reset to zero after flush. In order to avoid this export
+    // altering the underlying metrics counter, need to track the last count exported and send only
+    // the difference.
+    long newCount = counter.getCount();
+    long lastCount = 0;
+    if (flushedCounters.containsKey(name)) {
+      lastCount = flushedCounters.get(name);
+    }
+    flushedCounters.put(name, newCount);
+    statsD.send(prefix(name), formatNumber(newCount - lastCount), MetricType.COUNTER);
   }
 
   @SuppressWarnings("rawtypes") //Metrics 3.0 passes us the raw Gauge type
   private void reportGauge(final String name, final Gauge gauge) {
     final String value = format(gauge.getValue());
     if (value != null) {
-      statsD.send(prefix(name), value);
+      statsD.send(prefix(name), value, MetricType.GAUGE);
     }
   }
 
